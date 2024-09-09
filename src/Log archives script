@@ -1,0 +1,175 @@
+# Self-elevating function
+Function Test-Elevation {
+    If (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+        If ([int](Get-Host).Version.Major -ge 6) {
+            Start-Process -FilePath "PowerShell.exe" -ArgumentList "& '$($MyInvocation.MyCommand.Path)' -ExecutionPolicy Bypass" -Verb RunAs
+        } Else {
+            Start-Process -FilePath "PowerShell.exe" -ArgumentList "& '$($MyInvocation.MyCommand.Path)'" -Verb RunAs
+        }
+        Exit
+    }
+}
+
+# Check if running as administrator
+Test-Elevation
+
+# Variables
+$tomcatLogDir = "C:\path\to\tomcat\logs"
+$archiveDir = "C:\path\to\archive"
+$logDir = "C:\path\to\log"
+$date = Get-Date -Format "yyyy-MM-dd"
+$archiveBaseFile = "$archiveDir\tomcat-logs-$date"
+$logFile = "$logDir\archive-log-$date.txt"
+$errorLogFile = "$logDir\archive-errors-$date.txt"
+$transcriptFile = "$logDir\archive-transcript-$date.txt"
+$maxArchiveSize = 2GB
+$archivedItems = @()  # List to track successfully archived items
+
+# Print and log variables
+Write-Host "Tomcat Log Directory: $tomcatLogDir"
+Write-Log "Tomcat Log Directory: $tomcatLogDir"
+Write-Host "Archive Directory: $archiveDir"
+Write-Log "Archive Directory: $archiveDir"
+Write-Host "Log Directory: $logDir"
+Write-Log "Log Directory: $logDir"
+Write-Host "Date: $date"
+Write-Log "Date: $date"
+Write-Host "Max Archive Size: $maxArchiveSize"
+Write-Log "Max Archive Size: $maxArchiveSize"
+
+# Create directories if they don't exist
+if (-Not (Test-Path -Path $archiveDir)) {
+    New-Item -ItemType Directory -Path $archiveDir
+}
+if (-Not (Test-Path -Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir
+}
+
+# Start transcript to capture all output and errors
+Start-Transcript -Path $transcriptFile
+
+# Log function
+function Write-Log {
+    param (
+        [string]$message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - $message"
+    Add-Content -Path $logFile -Value $logMessage
+}
+
+# Error log function
+function Write-ErrorLog {
+    param (
+        [string]$message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - ERROR: $message"
+    Add-Content -Path $errorLogFile -Value $logMessage
+}
+
+# Error handling
+trap {
+    Write-ErrorLog "$($_.Exception.Message)"
+    continue
+}
+
+# Start logging
+Write-Log "Archival process started."
+
+# Get the date from two days ago
+$twoDaysAgo = (Get-Date).AddDays(-2)
+
+# Print and log the date from two days ago
+Write-Host "Date two days ago: $twoDaysAgo"
+Write-Log "Date two days ago: $twoDaysAgo"
+
+# Get all log files and directories except those modified in the last two days, including from subdirectories
+$itemsToArchive = Get-ChildItem -Path $tomcatLogDir -Recurse | Where-Object { $_.LastWriteTime -lt $twoDaysAgo }
+
+# Print and log the items to be archived
+Write-Host "Items to archive:"
+$itemsToArchive | ForEach-Object { Write-Host $_.FullName; Write-Log $_.FullName }
+
+# Function to split files into multiple archives based on size limit and track successfully archived files
+function Split-Into-Archives {
+    param (
+        [string[]]$files,
+        [int64]$maxSize,
+        [string]$baseArchiveFile
+    )
+
+    $currentArchiveIndex = 1
+    $currentArchiveSize = 0
+    $currentArchiveFiles = @()
+
+    foreach ($file in $files) {
+        $fileSize = (Get-Item $file).Length
+        if (($currentArchiveSize + $fileSize) -gt $maxSize) {
+            $currentArchiveName = "$baseArchiveFile-$currentArchiveIndex.zip"
+            Compress-Archive -Path $currentArchiveFiles -DestinationPath $currentArchiveName -Force
+            Write-Log "Archived files to $currentArchiveName"
+            Write-Host "Archived files to $currentArchiveName"
+            
+            # Add successfully archived files to $archivedItems
+            $archivedItems += $currentArchiveFiles
+
+            $currentArchiveIndex++
+            $currentArchiveSize = 0
+            $currentArchiveFiles = @()
+        }
+
+        $currentArchiveFiles += $file
+        $currentArchiveSize += $fileSize
+    }
+
+    if ($currentArchiveFiles.Count -gt 0) {
+        $currentArchiveName = "$baseArchiveFile-$currentArchiveIndex.zip"
+        Compress-Archive -Path $currentArchiveFiles -DestinationPath $currentArchiveName -Force
+        Write-Log "Archived files to $currentArchiveName"
+        Write-Host "Archived files to $currentArchiveName"
+        
+        # Add successfully archived files to $archivedItems
+        $archivedItems += $currentArchiveFiles
+    }
+}
+
+# Prepare list of items to archive
+$itemsList = $itemsToArchive | Select-Object -ExpandProperty FullName
+
+# Split items into multiple archives based on size
+Split-Into-Archives -files $itemsList -maxSize $maxArchiveSize -baseArchiveFile $archiveBaseFile
+
+# Delete only the successfully archived files from the source directory
+$archivedItems | ForEach-Object {
+    try {
+        Remove-Item -Path $_ -Recurse -Force
+        Write-Log "Deleted item: $_"
+        Write-Host "Deleted item: $_"
+    } catch {
+        Write-ErrorLog "Failed to delete item: $_ - $_"
+        Write-Host "Failed to delete item: $_ - $_"
+    }
+}
+
+# Optional: Remove archives older than 30 days
+# Get-ChildItem -Path $archiveDir -Filter "*.zip" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | ForEach-Object {
+#     try {
+#         Remove-Item -Path $_.FullName -Force
+#         Write-Log "Deleted old archive: $($_.FullName)"
+#         Write-Host "Deleted old archive: $($_.FullName)"
+#     } catch {
+#         Write-ErrorLog "Failed to delete old archive: $($_.FullName) - $_"
+#         Write-Host "Failed to delete old archive: $($_.FullName) - $_"
+#     }
+# }
+
+# End logging
+Write-Log "Archival process completed."
+Write-Host "Archival process completed."
+
+# Stop transcript to end capturing all output and errors
+Stop-Transcript
+
+# Pause execution to review output and errors
+Read-Host "Press Enter to exit"
