@@ -1,0 +1,42 @@
+# Function to check if a file is in use (locked by another process)
+function Test-FileLocked {
+    param (
+        [string]$filePath
+    )
+
+    $fileLocked = $false
+
+    try {
+        # Attempt to open the file with exclusive access
+        $fileStream = [System.IO.File]::Open($filePath, 'Open', 'Read', 'None')
+        $fileStream.Close()
+    } catch {
+        # If an exception occurs, the file is likely locked
+        $fileLocked = $true
+    }
+
+    return $fileLocked
+}
+
+# Directory containing logs
+$logDirectory = "C:\path\to\logs"
+
+# Get all files from the directory
+$files = Get-ChildItem -Path $logDirectory
+
+foreach ($file in $files) {
+    # Check if the file is locked
+    $isLocked = Test-FileLocked -filePath $file.FullName
+    
+    if ($isLocked) {
+        Write-Host "Skipping file: $($file.FullName) as it is in use by another process."
+        # Log skipped file to an error log
+        Add-Content -Path "C:\path\to\log\skipped-files.txt" -Value "Skipped file: $($file.FullName) - in use"
+        continue
+    }
+
+    # If the file is not locked, perform your archiving or processing here
+    Write-Host "Processing file: $($file.FullName)"
+    
+    # Your code for archiving or other processing...
+}
