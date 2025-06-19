@@ -1,0 +1,24 @@
+@Configuration
+@EnableWebSecurity
+public class WipsSecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .headers(headers -> headers.frameOptions().sameOrigin())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/authenticate").permitAll()
+                .anyRequest().authenticated()
+            )
+            .oauth2Login(oauth2 -> oauth2.defaultSuccessUrl("/authenticate", true))
+            .logout(logout -> logout
+                .invalidateHttpSession(true)
+                .deleteCookies("CSILL", "CSESSION", "CSSESSION", "JSESSIONID", "s_CC", "s_sq")
+                .logoutUrl(wipsUtil.getPingLogoutUrl())
+                .addLogoutHandler(sessionOutController)
+            )
+            .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler()));
+
+        return http.build();
+    }
+}
