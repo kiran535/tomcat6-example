@@ -1,0 +1,122 @@
+package com.wellsfargo.wips.spring.config;
+
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
+import org.springframework.security.oauth2.jwt.OidcIdTokenDecoderFactory;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
+
+import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Configuration
+public class WipsSecurityConfig {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WipsSecurityConfig.class);
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .headers(headers -> headers.frameOptions().sameOrigin())
+            .oauth2Login(oauth2 -> oauth2.defaultSuccessUrl("/authenticate", true))
+            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+            .logout(logout -> logout
+                .invalidateHttpSession(true)
+                .deleteCookies("CSILL", "CSSESSION", "CSISESSION", "JSESSIONID", "S_CC", "SMSESSION")
+                .logoutUrl(wipsUtil.getPingLogoutUrl())
+                .addLogoutHandler(sessionOutController)
+            )
+            .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler()));
+
+        return http.build();
+    }
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return new UserAccessDeniedHandler();
+    }
+
+    @Bean
+    public ClientRegistrationRepository clientRegistrationRepository() {
+        return new InMemoryClientRegistrationRepository(this.getRegistration());
+    }
+
+    @Bean
+    public AuthorizationRequestRepository<?> authorizationRequestRepository() {
+        return new HttpSessionOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientRepository authorizedClientRepository() {
+        return new HttpSessionOAuth2AuthorizedClientRepository();
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientService authorizedClientService(ClientRegistrationRepository clientRegistrationRepository) {
+        return new InMemoryOAuth2AuthorizedClientService(clientRegistrationRepository);
+    }
+
+    @Bean
+    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
+        OidcIdTokenDecoderFactory factory = new OidcIdTokenDecoderFactory();
+        factory.setJwsAlgorithmResolver(clientRegistration -> SignatureAlgorithm.RS256);
+        return factory;
+    }
+
+    @Bean
+    public GrantedAuthoritiesMapper userAuthoritiesMapper() {
+        return authorities -> {
+            Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
+            authorities.forEach(authority -> {
+                if (authority instanceof OidcUserAuthority oidcUserAuthority) {
+                    mappedAuthorities.add(oidcUserAuthority);
+                }
+            });
+            LOG.info("userAuthoritiesMapper: {}", mappedAuthorities);
+            return mappedAuthorities;
+        };
+    }
+
+    private ClientRegistration getRegistration() {
+        ServiceParser serviceParser = new ServiceParser();
+        HashMap<String, String> pingCredentials = serviceParser.getServiceCredentialsHasHmap(GlobalConstants.PING_SERVICE_NAME);
+
+        return ClientRegistration.withRegistrationId(GlobalConstants.PING.trim())
+            .clientId(pingCredentials.get(GlobalConstants.PING_CLIENT_ID).trim())
+            .clientSecret(pingCredentials.get(GlobalConstants.PING_CLIENT_SECRET).trim())
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .redirectUri(pingCredentials.get(GlobalConstants.PING_REDIRECT_URI).trim())
+            .authorizationUri(pingCredentials.get(GlobalConstants.PING_AUTHORIZATION_URI).trim())
+            .tokenUri(pingCredentials.get(GlobalConstants.PING_TOKEN_URI).trim())
+            .userInfoUri(pingCredentials.get(GlobalConstants.PING_USER_INFO_URI).trim())
+            .userNameAttributeName(IdTokenClaimNames.SUB)
+            .jwkSetUri(pingCredentials.get(GlobalConstants.PING_JWT_SET_URI).trim())
+            .issuerUri(pingCredentials.get(GlobalConstants.PING_ISSUER_URI).trim())
+            .build();
+    }
+
+    // Dependencies like wipsUtil and sessionOutController must be injected with @Autowired or constructor injection
+    @Autowired
+    private WIPSUtil wipsUtil;
+
+    @Autowired
+    private LogoutHandler sessionOutController;
+}
