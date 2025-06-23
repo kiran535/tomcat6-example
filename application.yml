@@ -1,0 +1,18 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          ping:
+            client-id: your-client-id
+            client-secret: your-client-secret
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            authorization-grant-type: authorization_code
+            scope: openid, profile, email
+        provider:
+          ping:
+            authorization-uri: https://your-ping-server/as/authorize
+            token-uri: https://your-ping-server/as/token
+            user-info-uri: https://your-ping-server/idp/userinfo.openid
+            jwk-set-uri: https://your-ping-server/pf/JWKS
+            user-name-attribute: sub
