@@ -1,0 +1,116 @@
+@Configuration
+@EnableWebSecurity
+public class WipsSecurityConfig {
+
+    @Autowired
+    private SessionOutController sessionOutController;
+
+    @Autowired
+    private WIPSUtil wipsUtil;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityContext(context -> context.requireExplicitSave(true))
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.ALWAYS))
+            .headers(headers -> headers.frameOptions().sameOrigin())
+
+            .oauth2Login(oauth2 -> oauth2
+                .authorizationEndpoint(authorization -> 
+                    authorization
+                        .authorizationRequestRepository(authorizationRequestRepository())
+                )
+                .defaultSuccessUrl("/authenticate", true)
+            )
+
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/resources/**", "/static/**", "/WebContent/**").permitAll()
+                .anyRequest().authenticated()
+            )
+
+            .logout(logout -> logout
+                .invalidateHttpSession(true)
+                .deleteCookies("CSILL", "CSESESSION", "CSISESSION", "JSESSIONID", "s_cc", "s_sq")
+                .addLogoutHandler(sessionOutController)
+                .logoutUrl(wipsUtil.getPingLogoutUrl())
+            )
+
+            .exceptionHandling(exception -> 
+                exception.accessDeniedHandler(accessDeniedHandler())
+            );
+
+        return http.build();
+    }
+
+    // 👇 Required Beans
+
+    @Bean
+    public AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository() {
+        return new HttpSessionOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
+    public SecurityContextRepository httpSessionSecurityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return new UserAccessDeniedHandler();
+    }
+
+    @Bean
+    public ClientRegistrationRepository clientRegistrationRepository() {
+        return new InMemoryClientRegistrationRepository(getRegistration());
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientService authorizedClientService() {
+        return new InMemoryOAuth2AuthorizedClientService(clientRegistrationRepository());
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientRepository authorizedClientRepository() {
+        return new HttpSessionOAuth2AuthorizedClientRepository();
+    }
+
+    // 👇 PingFederate Registration using values from ServiceParser
+    private ClientRegistration getRegistration() {
+        ServiceParser serviceParser = new ServiceParser();
+        HashMap<String, String> pingCreds = serviceParser.getServiceCredentialsHashMap(GlobalConstants.PING);
+
+        return ClientRegistration.withRegistrationId(GlobalConstants.PING)
+            .clientId(pingCreds.get(GlobalConstants.PING_CLIENT_ID))
+            .clientSecret(pingCreds.get(GlobalConstants.PING_CLIENT_SECRET))
+            .redirectUri(pingCreds.get(GlobalConstants.PING_REDIRECT_URI))
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .scope(GlobalConstants.OPENID)
+            .authorizationUri(pingCreds.get(GlobalConstants.PING_AUTHORIZATION_URI))
+            .tokenUri(pingCreds.get(GlobalConstants.PING_TOKEN_URI))
+            .userInfoUri(pingCreds.get(GlobalConstants.PING_USER_INFO_URI))
+            .userNameAttributeName(IdTokenClaimNames.SUB)
+            .jwkSetUri(pingCreds.get(GlobalConstants.PING_JWT_SET_URI))
+            .issuerUri(pingCreds.get(GlobalConstants.PING_ISSUER_URI))
+            .build();
+    }
+
+    @Bean
+    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
+        OidcIdTokenDecoderFactory factory = new OidcIdTokenDecoderFactory();
+        factory.setJwsAlgorithmResolver(registration -> SignatureAlgorithm.PS256);
+        return factory;
+    }
+
+    @Bean
+    public GrantedAuthoritiesMapper userAuthoritiesMapper() {
+        return authorities -> {
+            Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
+            authorities.forEach(authority -> {
+                if (authority instanceof OidcUserAuthority oidcUserAuthority) {
+                    mappedAuthorities.add(oidcUserAuthority);
+                }
+            });
+            return mappedAuthorities;
+        };
+    }
+}
