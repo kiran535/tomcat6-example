@@ -1,0 +1,34 @@
+@Bean
+public GrantedAuthoritiesMapper userAuthoritiesMapper() {
+    return authorities -> {
+        Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
+
+        for (GrantedAuthority authority : authorities) {
+            if (authority instanceof OidcUserAuthority oidcUserAuthority) {
+                OidcIdToken idToken = oidcUserAuthority.getIdToken();
+                OidcUserInfo userInfo = oidcUserAuthority.getUserInfo();
+
+                // Try from ID token first
+                List<String> roles = idToken.getClaimAsStringList("roles");
+                if (roles == null || roles.isEmpty()) {
+                    // Try from user info if not found
+                    if (userInfo != null) {
+                        roles = userInfo.getClaimAsStringList("roles");
+                        if (roles == null) {
+                            roles = userInfo.getClaimAsStringList("groups");
+                        }
+                    }
+                }
+
+                if (roles != null) {
+                    for (String role : roles) {
+                        mappedAuthorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                    }
+                }
+            }
+        }
+
+        System.out.println("Mapped Roles: " + mappedAuthorities);
+        return mappedAuthorities;
+    };
+}
