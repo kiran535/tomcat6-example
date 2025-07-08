@@ -1,0 +1,133 @@
+package com.wellsfargo.wips.spring.config;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.config.http.SessionCreationPolicy;
+
+@Configuration
+@EnableWebSecurity
+public class WipsSecurityConfig {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WipsSecurityConfig.class);
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   AccessDeniedHandler accessDeniedHandler,
+                                                   LogoutHandler sessionOutController,
+                                                   WIPSUtil wipsUtil) throws Exception {
+
+        http
+            .csrf(csrf -> csrf.disable())
+
+            .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+
+            .securityContext(context -> context.requireExplicitSave(true))
+
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
+            )
+
+            .requestCache(cache -> cache.requestCache(new HttpSessionRequestCache()))
+
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/resources/**", "/static/**", "/WebContent/**").permitAll()
+                .requestMatchers("/MainPage.jsp", "/Main.jsp").permitAll()
+                .anyRequest().authenticated()
+            )
+
+            .oauth2Login(oauth2 -> oauth2
+                .authorizationEndpoint(authz -> authz
+                    .authorizationRequestRepository(authorizationRequestRepository())
+                )
+                .successHandler(customAuthSuccessHandler())
+                .defaultSuccessUrl("/authenticate", true)
+            )
+
+            .logout(logout -> logout
+                .invalidateHttpSession(true)
+                .deleteCookies("CSIL", "CSESSION", "CSESSIONID", "s_cc", "s_sq")
+                .logoutUrl(wipsUtil.getPingLogoutUrl())
+                .addLogoutHandler(sessionOutController)
+            )
+
+            .exceptionHandling(ex -> ex
+                .accessDeniedHandler(accessDeniedHandler)
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository() {
+        return new HttpSessionOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return new UserAccessDeniedHandler();  // Assuming this class exists
+    }
+
+    @Bean
+    public AuthenticationSuccessHandler customAuthSuccessHandler() {
+        return new CustomAuthSuccessHandler(); // Assuming your logic sets freshLogin/session data
+    }
+
+    @Bean
+    public ClientRegistrationRepository clientRegistrationRepository() {
+        return new InMemoryClientRegistrationRepository(this.getRegistration());
+    }
+
+    private ClientRegistration getRegistration() {
+        ServiceParser serviceParser = new ServiceParser();
+        HashMap<String, String> pingCredentials = serviceParser.getServiceCredentialsHashMap(IGlobalConstants.PING_SERVICE_NAME);
+
+        return ClientRegistration.withRegistrationId(IGlobalConstants.PING.trim())
+                .clientId(pingCredentials.get(IGlobalConstants.PING_CLIENT_ID).trim())
+                .clientSecret(pingCredentials.get(IGlobalConstants.PING_CLIENT_SECRET).trim())
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri(pingCredentials.get(IGlobalConstants.PING_REDIRECT_URI).trim())
+                .scope(IGlobalConstants.OPENID, IGlobalConstants.CSILPROFILE)
+                .authorizationUri(pingCredentials.get(IGlobalConstants.PING_AUTHORIZATION_URI).trim())
+                .tokenUri(pingCredentials.get(IGlobalConstants.PING_TOKEN_URI).trim())
+                .userInfoUri(pingCredentials.get(IGlobalConstants.PING_USERINFO_URI).trim())
+                .userNameAttributeName(IdTokenClaimNames.SUB)
+                .jwkSetUri(pingCredentials.get(IGlobalConstants.PING_JWT_SET_URI).trim())
+                .issuerUri(pingCredentials.get(IGlobalConstants.PING_ISSUER_URI).trim())
+                .build();
+    }
+
+    @Bean
+    public GrantedAuthoritiesMapper userAuthoritiesMapper() {
+        return authorities -> {
+            Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
+            for (GrantedAuthority authority : authorities) {
+                if (authority instanceof OidcUserAuthority) {
+                    OidcUserAuthority oidcUserAuthority = (OidcUserAuthority) authority;
+                    LOG.info("Into authority mapper - oidcUserAuthority");
+                    mappedAuthorities.add(oidcUserAuthority);
+                }
+            }
+            LOG.info("userAuthoritiesMapper -> {}", mappedAuthorities);
+            return mappedAuthorities;
+        };
+    }
+}
