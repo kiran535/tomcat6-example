@@ -1,0 +1,113 @@
+@Configuration
+@EnableWebSecurity
+public class WipsSecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        System.out.println("Coming to Spring Security class");
+
+        http
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.sameOrigin())
+            )
+            .oauth2Login(oauth -> oauth
+                .defaultSuccessUrl("/authenticate", true)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated()
+            )
+            .logout(logout -> logout
+                .invalidateHttpSession(true)
+                .deleteCookies("CSILL", "CSESSION", "CISSESSION", "JSESSIONID", "S_CC", "S_SQ")
+                .addLogoutHandler(sessionOutController())
+                .logoutSuccessUrl("https://cspf-uat.wellsfargo.net/idp/startSLO.ping")
+            )
+            .exceptionHandling(ex -> ex
+                .accessDeniedHandler(accessDeniedHandler())
+            );
+
+        return http.build();
+    }
+
+    // 👇 Replace with actual implementation or inject via constructor
+    @Bean
+    public LogoutHandler sessionOutController() {
+        return new SessionOutController(); // Replace with your actual handler class
+    }
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return new UserAccessDeniedHandler(); // Replace with your custom implementation
+    }
+
+    @Bean
+    public ClientRegistrationRepository clientRegistrationRepository() {
+        return new InMemoryClientRegistrationRepository(getRegistration());
+    }
+
+    @Bean
+    public AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository() {
+        return new HttpSessionOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientService authorizedClientService(ClientRegistrationRepository repo) {
+        return new InMemoryOAuth2AuthorizedClientService(repo);
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientRepository authorizedClientRepository() {
+        return new HttpSessionOAuth2AuthorizedClientRepository();
+    }
+
+    @Bean
+    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
+        OidcIdTokenDecoderFactory factory = new OidcIdTokenDecoderFactory();
+        factory.setJwsAlgorithmResolver(clientRegistration -> SignatureAlgorithm.PS256);
+        return factory;
+    }
+
+    @Bean
+    public GrantedAuthoritiesMapper userAuthoritiesMapper() {
+        return authorities -> {
+            Set<GrantedAuthority> mappedAuthorities = new HashSet<>();
+            authorities.forEach(authority -> {
+                if (authority instanceof OidcUserAuthority oidcUserAuthority) {
+                    LOG.info("Into Authority Mapper: " + oidcUserAuthority);
+                    mappedAuthorities.add(oidcUserAuthority);
+                }
+            });
+            LOG.info("userAuthoritiesMapper: " + mappedAuthorities);
+            return mappedAuthorities;
+        };
+    }
+
+    private ClientRegistration getRegistration() {
+        Map<String, String> pingCreds = new HashMap<>();
+        pingCreds.put(GlobalConstants.PING_CLIENT_ID, "ab9d9259-2af6-4f26-aebd-510e949e51ae");
+        pingCreds.put(GlobalConstants.PING_CLIENT_SECRET, "");
+        pingCreds.put(GlobalConstants.PING_REDIRECT_URI, "http://localhost:8080/login/oauth2/code/ping");
+        pingCreds.put(GlobalConstants.PING_ISSUER_URI, "https://cspf.sit.wellsfargo.net");
+        pingCreds.put(GlobalConstants.PING_AUTHORIZATION_URI, "https://cspf.sit.wellsfargo.net/as/authorization.oauth2");
+        pingCreds.put(GlobalConstants.PING_TOKEN_URI, "https://cspf.sit.wellsfargo.net/as/token.oauth2");
+        pingCreds.put(GlobalConstants.PING_USER_INFO_URI, "https://cspf.sit.wellsfargo.net/idp/userinfo.openid");
+        pingCreds.put(GlobalConstants.PING_JWK_SET_URI, "");
+        pingCreds.put(GlobalConstants.PING_REVOCATION_ENDPOINT, "https://cspf.sit.wellsfargo.net/as/revoke_token.oauth2");
+
+        return ClientRegistration.withRegistrationId("ping")
+            .clientId(pingCreds.get(GlobalConstants.PING_CLIENT_ID).trim())
+            .clientSecret(pingCreds.get(GlobalConstants.PING_CLIENT_SECRET).trim())
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .redirectUri(pingCreds.get(GlobalConstants.PING_REDIRECT_URI).trim())
+            .scope("openid", "profile")
+            .authorizationUri(pingCreds.get(GlobalConstants.PING_AUTHORIZATION_URI).trim())
+            .tokenUri(pingCreds.get(GlobalConstants.PING_TOKEN_URI).trim())
+            .userInfoUri(pingCreds.get(GlobalConstants.PING_USER_INFO_URI).trim())
+            .jwkSetUri(pingCreds.get(GlobalConstants.PING_JWK_SET_URI).trim())
+            .userNameAttributeName(IdTokenClaimNames.SUB)
+            .clientName("Ping Identity")
+            .build();
+    }
+
+    private static final Logger LOG = LoggerFactory.getLogger(WipsSecurityConfig.class);
+}
