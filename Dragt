@@ -1,0 +1,29 @@
+Here’s a corrected and improved version of your email, including a high-level root cause for the iframe login/session issues:
+
+
+---
+
+Subject: WIPS Spring 6 Upgrade
+
+Hi Prashant,
+
+I have resolved the Spring 6 upgrade issue after making changes on a fresh branch (created from the production version).
+
+The application is now up and running locally. I am able to log in and log out using test users successfully. The logs look clean, and all requests are reaching the appropriate handlers in the code.
+
+I will need to make several changes before pushing the code to the development branch, as I was initially using hardcoded values for the local setup.
+
+I also updated the dependency versions. While reviewing, I noticed that Spring Boot dependencies were mistakenly used in the core Spring project.
+
+Root Cause (Iframe/Login Issue):
+The login controller had session.invalidate() logic, which was causing issues when the application was loaded within an iframe. This broke the session and prevented cookies from being correctly forwarded. Removing the manual session invalidation and allowing Spring Security to manage the session lifecycle resolved the issue. Additionally, the incorrect cookie behavior was due to the SameSite attribute not being properly configured for iframe usage, especially under modern browser security policies.
+
+Let me know if you need further details.
+
+Thanks,
+[Your Name]
+
+
+---
+
+Let me know if you'd like to personalize the sign-off or explain technical terms for a non-technical recipient.
