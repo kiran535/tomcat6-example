@@ -1,0 +1,101 @@
+package com.wellsfargo.wips.spring.config;
+
+import java.util.HashMap;
+import javax.sql.DataSource;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.tomcat.dbcp.dbcp2.BasicDataSource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+
+@Configuration
+@Profile("cloud")
+public class DataBaseServiceConfiguration {
+
+    private static final Logger log = LogManager.getLogger(DataBaseServiceConfiguration.class);
+
+    @Value("${wips.datasource.service.name}")
+    private String wipsUserProvidedServiceName;
+
+    @Value("${colts.datasource.service.name}")
+    private String coltsUserProvidedServiceName;
+
+    /**
+     * Bean for CDB DataSource
+     */
+    @Bean(name = "cdbDataSource")
+    public DataSource cdbDataSource() throws Exception {
+        System.out.println("Creating Data source - CDB (cloud)");
+
+        BasicDataSource dataSource = new BasicDataSource();
+        ServiceParser serviceParser = new ServiceParser();
+        HashMap<String, String> serviceCredentialsMap =
+                serviceParser.getServiceCredentialsHashMap(coltsUserProvidedServiceName);
+
+        String jdbcURL = serviceCredentialsMap.get("url");
+        String driverClassName = serviceCredentialsMap.get("driverclassname");
+        String userName = serviceCredentialsMap.get("username");
+        String password = serviceCredentialsMap.get("password");
+        String maxIdle = serviceCredentialsMap.get("maxIdle");
+        String maxTotal = serviceCredentialsMap.get("maxTotal");
+        String minEvictableIdleTimeMillis = serviceCredentialsMap.get("minEvictableIdleTimeMillis");
+        String minIdle = serviceCredentialsMap.get("minIdle");
+        String maxWaitMillis = serviceCredentialsMap.get("maxWaitMillis");
+
+        dataSource.setDriverClassName(driverClassName);
+        dataSource.setUrl(jdbcURL);
+        dataSource.setUsername(userName);
+        dataSource.setPassword(password);
+        dataSource.setMaxIdle(Integer.parseInt(maxIdle));
+        dataSource.setMaxTotal(Integer.parseInt(maxTotal));
+        dataSource.setMinEvictableIdleTimeMillis(Long.parseLong(minEvictableIdleTimeMillis));
+        dataSource.setMinIdle(Integer.parseInt(minIdle));
+        dataSource.setMaxWaitMillis(Long.parseLong(maxWaitMillis));
+        dataSource.setValidationQuery("select 1 from dual");
+        dataSource.setTestOnBorrow(true);
+        dataSource.setRemoveAbandonedOnMaintenance(true);
+
+        return dataSource;
+    }
+
+    /**
+     * Bean for WIPS DataSource
+     */
+    @Bean(name = "wipsDataSource")
+    public DataSource wipsDataSource() throws Exception {
+        System.out.println("Creating Data source - WIPS (cloud)");
+
+        BasicDataSource dataSource = new BasicDataSource();
+        ServiceParser serviceParser = new ServiceParser();
+        HashMap<String, String> serviceCredentialsMap =
+                serviceParser.getServiceCredentialsHashMap(wipsUserProvidedServiceName);
+
+        String jdbcURL = serviceCredentialsMap.get("url");
+        String driverClassName = serviceCredentialsMap.get("driverclassname");
+        String userName = serviceCredentialsMap.get("username");
+        String password = serviceCredentialsMap.get("password");
+        String maxIdle = serviceCredentialsMap.get("maxIdle");
+        String maxTotal = serviceCredentialsMap.get("maxTotal");
+        String minEvictableIdleTimeMillis = serviceCredentialsMap.get("minEvictableIdleTimeMillis");
+        String minIdle = serviceCredentialsMap.get("minIdle");
+        String maxWaitMillis = serviceCredentialsMap.get("maxWaitMillis");
+
+        dataSource.setDriverClassName(driverClassName);
+        dataSource.setUrl(jdbcURL);
+        dataSource.setUsername(userName);
+        dataSource.setPassword(password);
+        dataSource.setMaxIdle(Integer.parseInt(maxIdle));
+        dataSource.setMaxTotal(Integer.parseInt(maxTotal));
+        dataSource.setMinEvictableIdleTimeMillis(Long.parseLong(minEvictableIdleTimeMillis));
+        dataSource.setMinIdle(Integer.parseInt(minIdle));
+        dataSource.setMaxWaitMillis(Long.parseLong(maxWaitMillis));
+        dataSource.setValidationQuery("select 1 from dual");
+        dataSource.setTestOnBorrow(true);
+        dataSource.setRemoveAbandonedOnMaintenance(true);
+
+        return dataSource;
+    }
+}
