@@ -1,9 +1,17 @@
-I have been with Wells Fargo for the past 10 years and have contributed across multiple projects, most recently as a Lead Software Engineer. During this period, I have consistently strived to deliver quality outcomes and support the organization’s goals.
+Hi Team,
 
-After moving to a new manager due to the reallocation of applications, my performance ratings have unfortunately declined despite my sincere efforts to improve. I have been placed on a Performance Improvement Plan (PIP), and after careful consideration, I believe it may be best for me to move on from the organization.
+I am working on the following stories in this sprint:
 
-Given my long tenure and contributions, I kindly request HR’s support in considering a severance package that would help me manage my financial needs during this transition.
+XWTQ-7360 – Test Records Retention Purge (Sprint 18) – Completed
 
-I would appreciate your guidance on the next steps and any options that may be available to me.
+XWTQ-7479 – Test Records Retention Purge Part 2 (Sprint 19) – Created for new requirements
 
-Thank you for your understanding and support.
+XWTQ-7207 – NFR Tracking Error Number in WIOPS (Sprint 19)
+
+XWTQ-6265 – WIOPS Production Support for Spring 6 Upgrade (Sprint 19) – Completed
+
+As we discussed in today’s connect, as committed, I worked on XWTQ-7360 in Sprint 18. I resolved all the outstanding issues and successfully tested both the purge and rollback scripts.
+
+During testing, we sought clarification on cases where an inactive obligor has an active loan less than 10 years old. In this scenario, the inactive obligor was purged but not the loan. After further discussion, the product team introduced a new requirement and created XWTQ-7479 in Sprint 19. This is time-consuming and may result in another story being created as well.
+
+Please find the latest requirements below, and also find the attached document for peer review. Kindly go through it and share your feedback.
