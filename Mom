@@ -1,0 +1,61 @@
+Here’s an updated MOM with action items included:
+
+
+---
+
+Minutes of Meeting
+
+Date: [Insert Date]
+Participants: [Insert Names]
+
+Discussion Points
+
+1. Code Review
+
+Code reviews should be performed with appropriate and clear comments.
+
+
+
+2. NFR Story
+
+NFR story is not required, as there are no API calls to define HTTP error codes.
+
+
+
+3. Java 11 Upgrade
+
+Java 11 upgrade story cannot be taken up until the Axis2 JAR upgrade story is completed.
+
+
+
+4. Spring Security
+
+A presentation on Spring Security will be conducted, covering challenges faced in WIPS.
+
+
+
+5. Sprint 21 Updates
+
+A few additional stories have been added to Sprint 21.
+
+
+
+
+
+---
+
+Action Items
+
+[Your Name]:
+
+Check with Pitchireddy regarding Axis2 issues and plan to take it up after completing PIP.
+
+Confirm if he has any code stories available for peer review.
+
+
+
+
+---
+
+Would you like me to also format this with an "Owner / Target Date" column for the action items so it looks like a standard MOM tracker?
+
